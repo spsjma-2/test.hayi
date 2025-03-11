@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -6,7 +6,7 @@ using System.Text;
 class PasswordManager
 {
     private const string FilePath = "passwords.txt";
-    private const string EncryptionKey = "mysecurekey12345"; // Change this to a secure key
+    private const string EncryptionKey = "mysecurekey12345mysecurekey12345"; // Must be 32 bytes for AES-256
 
     static void Main()
     {
@@ -23,7 +23,7 @@ class PasswordManager
             switch (choice)
             {
                 case "1":
-                    string password = GeneratePassword(12); // Generate a 12-character password
+                    string password = GeneratePassword(12);
                     Console.WriteLine($"Generated Password: {password}");
                     break;
                 case "2":
@@ -44,11 +44,15 @@ class PasswordManager
     static string GeneratePassword(int length)
     {
         const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
-        StringBuilder password = new StringBuilder();
-        Random rnd = new Random();
-        for (int i = 0; i < length; i++)
+        var password = new StringBuilder();
+        using (var rng = new RNGCryptoServiceProvider())
         {
-            password.Append(chars[rnd.Next(chars.Length)]);
+            byte[] data = new byte[length];
+            rng.GetBytes(data);
+            for (int i = 0; i < length; i++)
+            {
+                password.Append(chars[data[i] % chars.Length]);
+            }
         }
         return password.ToString();
     }
@@ -82,15 +86,22 @@ class PasswordManager
         }
     }
 
-    static string Encrypt(string plainText)
+    static byte[] GetEncryptionKey()
     {
         byte[] keyBytes = Encoding.UTF8.GetBytes(EncryptionKey);
+        Array.Resize(ref keyBytes, 32); // Ensure it's 32 bytes for AES-256
+        return keyBytes;
+    }
+
+    static string Encrypt(string plainText)
+    {
+        byte[] keyBytes = GetEncryptionKey();
         byte[] plainBytes = Encoding.UTF8.GetBytes(plainText);
 
         using (Aes aes = Aes.Create())
         {
             aes.Key = keyBytes;
-            aes.IV = new byte[16]; // Zero IV for simplicity (not ideal for real security)
+            aes.IV = new byte[16]; // Zero IV for simplicity
             using (var encryptor = aes.CreateEncryptor())
             {
                 byte[] encryptedBytes = encryptor.TransformFinalBlock(plainBytes, 0, plainBytes.Length);
@@ -101,7 +112,7 @@ class PasswordManager
 
     static string Decrypt(string encryptedText)
     {
-        byte[] keyBytes = Encoding.UTF8.GetBytes(EncryptionKey);
+        byte[] keyBytes = GetEncryptionKey();
         byte[] encryptedBytes = Convert.FromBase64String(encryptedText);
 
         using (Aes aes = Aes.Create())
